@@ -63,7 +63,7 @@ class Calcer(CalcBase):
         self.file_bio.seek(0, 2)
         self.file_size_Byte = self.file_bio.tell()
 
-        total_capcity = constants.v_max_data_dict[self.version]
+        total_capcity = int(constants.v_max_data_dict[self.version] / 40 * 29) # 应对base64
         self.frame_pure_data_size_byte = total_capcity - DATA_F_META_SIZE_BYTE - self.ext_meta_size
 
         self.total_batch_count = int(math.ceil(self.file_size_Byte / self.frame_pure_data_size_byte))
@@ -121,7 +121,8 @@ class Calcer(CalcBase):
 
         qr = qrcode.QRCode(version=self.version, mask_pattern=constants.DEFAULT_MASK_PATTERN)
         try:
-            qr.add_data(QRData(main_data_obj.get_total_data_bytes(), mode=MODE_8BIT_BYTE))
+            # qr.add_data(QRData(main_data_obj.get_total_data_bytes(), mode=MODE_8BIT_BYTE))
+            qr.add_data(QRData(base64.b64encode(main_data_obj.get_total_data_bytes()), mode=MODE_8BIT_BYTE))
             im = qr.make_image()
             return im
         except Exception as e:
