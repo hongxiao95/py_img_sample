@@ -270,7 +270,7 @@ class MainDataBytesV1():
         self.ext_meta_bytes = ext_meta_bytes
         self.total_data = None
 
-        md5_source = self.data_bytes + bytes(str(self.cur_index), encoding="utf-8") + bytes(str(self.total_frame), encoding="utf-8") + bytes(self.transfer_uuid, encoding="utf-8")
+        md5_source = self.data_bytes + bytes(str(self.cur_index), encoding="utf-8") + bytes(self.transfer_uuid, encoding="utf-8")
         self.data_md5_str = hashlib.md5(md5_source).hexdigest()
         meta_1_num = self.cur_index
         if self.cur_index < self.total_frame - 1:
