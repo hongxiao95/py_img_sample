@@ -12,7 +12,6 @@ from PIL.Image import Image
 from utilpkg import constants
 from qrcode.util import QRData, MODE_8BIT_BYTE
 
-CODE_PROT_SINGLE_CLR = "single-color"
 CODE_PROT_RGB = "rgb"
 
 DATA_PROT_JSON = "JSON"
