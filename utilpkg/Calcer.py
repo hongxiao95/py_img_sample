@@ -3,6 +3,7 @@
 from curses import meta
 from io import BytesIO
 from tkinter import Image
+from unittest.mock import patch
 from utilpkg.CalcBase import ConfirmMethod, StatusCode, CalcBase
 from utilpkg import StringUtil
 import hashlib, json, base64, math, uuid
@@ -30,7 +31,6 @@ DATA_PROT_V_1 = 1
 
 class Calcer(CalcBase):
 
-    
     def __init__(self, file_name: str, bio: BytesIO, data_prot:str, data_prot_v: int, code_prot:str, confirm_method: int = ConfirmMethod.NO_CFM, qr_version: int=RECOMMAND_VERSION, ext_meta=None, ext_meta_size:int=0):
         CalcBase.__init__(self)
         self.file_name = file_name
@@ -57,7 +57,6 @@ class Calcer(CalcBase):
 
         self.main_data_inited = False
         
-        # 生成UUID
         self.trans_uuid = str(uuid.uuid4()).replace("-","")
 
         self.file_bio.seek(0, 2)
@@ -68,10 +67,10 @@ class Calcer(CalcBase):
 
         self.total_batch_count = int(math.ceil(self.file_size_Byte / self.frame_pure_data_size_byte))
 
-
         self.file_bio.seek(0)
         self.file_md5 = hashlib.md5(self.file_bio.read()).hexdigest()
 
+        #恢复文件指针
         self.file_bio.seek(0,0)
 
         # 生成握手包
@@ -79,19 +78,47 @@ class Calcer(CalcBase):
 
         self.main_data_list = []
 
+        # 补丁模式默认关闭
+        self.patch_mode = False
+        self.patch_frames = []
+        self.patchs_pointer = 0
+
+    def open_patchs(self, patch_frames:list):
+        self.patch_mode = True
+        self.patch_frames = [int(x) for x in patch_frames]
+        self.patchs_pointer = 0
+        self.index=self.patch_frames[self.patchs_pointer]
+
+    def close_patchs(self):
+        self.patch_mode = False
+        self.patch_frames = []
+        self.patchs_pointer = 0
 
     def reset_transfer_state(self):
+
         self.file_bio.seek(0,0)
         self.index = 0
+        self.close_patchs()
 
 
 
     def next_batch(self):
-        if self.index == self.total_batch_count - 1:
-            return False
+        # 常规模式
+        if self.patch_mode is False:
+            if self.index == self.total_batch_count - 1:
+                return False
+            else:
+                self.index += 1
+                return self.index
+        # 补丁模式
         else:
-            self.index += 1
-            return self.index
+            if self.patchs_pointer == len(self.patch_frames) - 1:
+                return False
+            else:
+                self.patchs_pointer += 1
+                self.index = self.patch_frames[self.patchs_pointer]
+                return self.index
+
 
     def gen_handshake_qr(self) -> Image:
         json_str = self.hand_shake_pkg.gen_hspkg_json()
@@ -101,7 +128,7 @@ class Calcer(CalcBase):
             qr.best_fit()
             return qr.make_image()
         except Exception as e:
-            print(f"生成失败,{e}")
+            print(f"生成二维码失败,{e}")
             return None
 
     def gen_cur_qr(self) -> Image:
@@ -119,33 +146,31 @@ class Calcer(CalcBase):
 
         main_data_obj = MainDataBytesV1(pure_data_bytes, self.index, self.total_batch_count, self.trans_uuid)
 
-        qr = qrcode.QRCode(version=self.version, mask_pattern=constants.DEFAULT_MASK_PATTERN)
+        qr = qrcode.QRCode(version=self.version, mask_pattern=constants.DEFAULT_MASK_PATTERN, box_size=15, border=6)
         try:
             # qr.add_data(QRData(main_data_obj.get_total_data_bytes(), mode=MODE_8BIT_BYTE))
             qr.add_data(QRData(base64.b64encode(main_data_obj.get_total_data_bytes()), mode=MODE_8BIT_BYTE))
             im = qr.make_image()
             return im
         except Exception as e:
-            print(f"生成失败,{e}")
+            print(f"生成二维码失败,{e}")
             return None
 
         pass
 
     def _gen_cur_qr_json(self) -> Image:
         json_str = self._gen_batch_data_json()
-        # print(f"生成JSON耗时: {(end-st) * 1000:.2f} 毫秒")
 
         qr = qrcode.QRCode(39, mask_pattern=5)
         try:
             qr.add_data(json_str)
             # qr.best_fit()
-            qr.version = 39 # 1536字节+base64时，39可以cover
+            qr.version = 39 
             
 
             # st = time.time()
             im = qr.make_image()
-            # end = time.time()
-            # print(f"mk qrimg耗时: {(end-st) * 1000:.2f} 毫秒")
+
 
             return im
         except Exception as e:
@@ -179,7 +204,7 @@ class Calcer(CalcBase):
 
 
     def _gen_handshake_pkg(self):
-        handshake_data = HandshakeDataV1(self.file_name, int(self.file_size_Byte / 1024), self.file_type, self.file_md5, self.data_prot,\
+        handshake_data = HandshakeDataV1(self.file_name, int(self.file_size_Byte / 1024), self.file_type, self.file_md5, self.total_batch_count, self.data_prot,\
             self.data_prot_v, self.confirm_method)
 
         hand_shake_pkg = HandshakePkgV1(True, StatusCode.OK, "ok", self.trans_uuid, handshake_data)
@@ -192,7 +217,7 @@ class HandshakeDataV1():
     '''
     握手传输的主数据
     '''
-    def __init__(self, file_name:str, file_size_kB:int, file_type:str, file_md5:str, data_prot:str, data_prot_v:str, confirm_method:int = ConfirmMethod.NO_CFM):
+    def __init__(self, file_name:str, file_size_kB:int, file_type:str, file_md5:str, total_data_frame_count:int, data_prot:str, data_prot_v:str, confirm_method:int = ConfirmMethod.NO_CFM):
         self.file_name = file_name
         self.file_size_kB = file_size_kB
         self.file_type = file_type
@@ -200,6 +225,7 @@ class HandshakeDataV1():
         self.data_prot = data_prot
         self.data_prot_v = data_prot_v
         self.confirm_method = confirm_method
+        self.total_data_frame_count = total_data_frame_count
         
         pass
 
@@ -227,21 +253,18 @@ class HandshakePkgV1():
 
     def _verify(self) -> tuple:
         if StringUtil.is_empty(self.main_data_md5):
-            return (False, "主md5缺失")
+            return (False, "主数据md5缺失")
         
         if StringUtil.is_empty(self.hand_shake_data_md5):
-            return (False, "握手md5缺失")
+            return (False, "握手数据md5缺失")
 
         if StringUtil.is_empty(self.uuid):
-            return (False, "UUID缺失")
+            return (False, "传输器UUID缺失")
 
         return (True, "OK")
 
     def _gen_hdsk_md5(self) -> str:
-        '''
-        多端MD5算法必须一致。
-        握手包版本号_主数据md5_uuid 算md5
-        '''
+
         return StringUtil.get_md5_lowerhex(f"{self.pkg_version}_{self.main_data_md5}_{self.uuid}")
 
     def _gen_hand_shake_main_data_md5(self) -> str:
@@ -270,14 +293,15 @@ class MainDataBytesV1():
         self.ext_meta_bytes = ext_meta_bytes
         self.total_data = None
 
-        md5_source = self.data_bytes + bytes(str(self.cur_index), encoding="utf-8") + bytes(self.transfer_uuid, encoding="utf-8")
-        self.data_md5_str = hashlib.md5(md5_source).hexdigest()
+        md5_source = self.data_bytes + bytes(str(self.cur_index), encoding="utf-8") + bytes(str(self.total_frame), encoding="utf-8") + bytes(self.transfer_uuid, encoding="utf-8")
+        self.data_md5_str = hashlib.md5(md5_source).hexdigest()[8:24]
         meta_1_num = self.cur_index
         if self.cur_index < self.total_frame - 1:
             meta_1_num = meta_1_num | (1 << 31)
         meta_1_num = meta_1_num | (self.ext_meta_size << 25)
 
         meta_1_bytes = meta_1_num.to_bytes(4, byteorder="big")
+        # 置partMD5
         self.total_data = meta_1_bytes + bytes(self.data_md5_str, encoding="utf-8")
         if isinstance(self.ext_meta_bytes, bytes):
             self.total_data += self.ext_meta_bytes

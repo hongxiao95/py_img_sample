@@ -16,14 +16,14 @@ from utilpkg.Calcer import CODE_PROT_SINGLE_CLR, DATA_PROT_BYTES, DATA_PROT_V_1,
 app_version = "1.0 Beta"
 # 最大50M
 MAX_FILE_SIZE = 1024 * 1024 * 50
-CANVAS_SIDE_SIZE = 400
+CANVAS_SIDE_SIZE = 500
 
 AUTHOR_DESC = f"版本: {app_version}"
 
-class QrAnyTransUI():
+class CalcerUI():
     def __init__(self):
         self.main_win = Tk()
-        self.main_win.wm_title("界面测试")
+        self.main_win.wm_title("图像测试")
         self.pure_file_name = ""
         self.img_tk_buffer = [0,0]
         self.img_handles = [0,0]
@@ -45,17 +45,16 @@ class QrAnyTransUI():
         self.main_win.mainloop()
 
     def _prepare_components(self):
-        # 选择文件按钮
         self.chosen_file_name_var = StringVar()
         self.choose_file_entry = Entry(self.main_win, state="readonly", textvariable=self.chosen_file_name_var)
         self.choose_file_btn = Button(self.main_win, text = "请选择文件", command=self.ask_file)
         self.choose_file_entry.grid(column=0, row=0, columnspan=6, sticky=EW)
         self.choose_file_btn.grid(column=6, row=0, columnspan=2, sticky=EW)
 
+        # 
         self.qr_canvas = Canvas(self.main_win, width=CANVAS_SIDE_SIZE, height=CANVAS_SIDE_SIZE, background="white")
         self.qr_canvas.grid(column=0, row=1, columnspan=8, rowspan=8)
 
-        # 速度调节 
         self.speed_var = DoubleVar()
         self.speed_var.set(5)
 
@@ -80,23 +79,32 @@ class QrAnyTransUI():
         self.pause_btn.grid(column=4, row=10, columnspan=2, sticky=EW)
         self.stop_btn.grid(column=6, row=10, columnspan=2, sticky=EW)
 
-        # 上一帧 下一帧
+        self.patch_frame_checkbtn_var = BooleanVar()
+        self.patch_frame_checkbtn_var.set(False)
+        self.patch_frame_checkbtn = Checkbutton(self.main_win, onvalue=True, offvalue=False, text="补帧", variable=self.patch_frame_checkbtn_var)
+        
+        self.patch_frames_var = StringVar()
+        self.patch_frames_var.set("")
+        self.patch_entry = Entry(self.main_win, textvariable=self.patch_frames_var)
+
+        self.patch_frame_checkbtn.grid(column=0, row=11, sticky=EW)
+        self.patch_entry.grid(column=1, row=11, columnspan=7, sticky=EW)
+
         self.prev_frame_btn = Button(self.main_win, text="上一帧")
         self.next_frame_btn = Button(self.main_win, text="下一帧")
 
-        self.prev_frame_btn.grid(column=0, row=11, columnspan=2, sticky=EW)
-        self.next_frame_btn.grid(column=2, row=11, columnspan=2, sticky=EW)
+        self.prev_frame_btn.grid(column=0, row=12, columnspan=1, sticky=EW)
+        self.next_frame_btn.grid(column=1, row=12, columnspan=3, sticky=EW)
 
-        # 跳转到某帧
         self.skip_spin_box = Spinbox(self.main_win, from_=0, to=1000, value=0, increment=1, validate="focus", validatecommand=self._check_skip_frame_spinbox, width=10)
         self.skip_prev_lable = Label(self.main_win, text="跳到")
         self.skip_after_label = Label(self.main_win, text="帧")
         self.skip_go_btn = Button(self.main_win, text="Go")
 
-        self.skip_prev_lable.grid(column=4, row=11, sticky=EW)
-        self.skip_spin_box.grid(column=5, row=11)
-        self.skip_after_label.grid(column=6, row=11, sticky=EW)
-        self.skip_go_btn.grid(column=7, row=11, sticky=EW)
+        self.skip_prev_lable.grid(column=4, row=12, sticky=EW)
+        self.skip_spin_box.grid(column=5, row=12)
+        self.skip_after_label.grid(column=6, row=12, sticky=EW)
+        self.skip_go_btn.grid(column=7, row=12, sticky=EW)
 
         # 执行信息
         self.file_size_var = StringVar()
@@ -111,30 +119,26 @@ class QrAnyTransUI():
         self.reset_tip()
         self.cur_frame_label = Label(self.main_win, textvariable=self.cur_tips)
 
-        self.file_size_label.grid(column=0, row=12, columnspan=2, sticky=W)
-        self.file_speed_label.grid(column=2, row=12, columnspan=3, sticky=W)
-        self.cur_frame_label.grid(column=5, row=12, columnspan=3, sticky=E)
+        self.file_size_label.grid(column=0, row=13, columnspan=2, sticky=W)
+        self.file_speed_label.grid(column=2, row=13, columnspan=3, sticky=W)
+        self.cur_frame_label.grid(column=5, row=13, columnspan=3, sticky=E)
 
 
         # 进度条
         self.progress_var = IntVar()
         self.progress_var.set(0)
         self.progress_bar = Progressbar(self.main_win, maximum=100, variable=self.progress_var, mode="determinate")
-        self.progress_bar.grid(column=0, row=13, columnspan=8, sticky=EW)
-
+        self.progress_bar.grid(column=0, row=14, columnspan=8, sticky=EW)
 
         # 作者信息
         self.author_info_label = Label(self.main_win, text=AUTHOR_DESC, foreground="gray")
-        self.author_info_label.grid(column=0, row=14, columnspan=8, sticky=E)
+        self.author_info_label.grid(column=0, row=15, columnspan=8, sticky=E)
 
 
         return
 
-
     def reset_app(self):
-        '''
-        重置整个应用，清除当前选择的文件和缓存
-        '''
+
         self.source_file = None
         self.source_bio = BytesIO()
         self.transfer = None
@@ -144,23 +148,18 @@ class QrAnyTransUI():
 
     def reset_task(self):
         
-        # 
         if (self.transfer is None) == False:
             self.transfer.reset_transfer_state()
             self.update_tip(f"文件初始化完成, Meta帧 / {self.transfer.total_batch_count}帧")
 
 
-        # 
         self.qr_canvas.delete("all")
 
-        # 
         self.speed_var.set(5)
         self.speed_var_int.set(5)
 
-        # 
         self.skip_spin_box.set(0)
 
-        # 
         self.start_btn_var.set("开始")
         self.start_btn.config(state="normal")
         self.pause_btn.config(state="disabled")
@@ -169,7 +168,6 @@ class QrAnyTransUI():
         self.next_frame_btn.config(state="disabled")
         self.skip_go_btn.config(state="disabled")
 
-        # 
         self.progress_var.set(0)
 
         self.qr_canvas.delete("all")
@@ -177,10 +175,8 @@ class QrAnyTransUI():
         self.img_handles = [0,0]
         self.buffer_index = 0
 
-        # 
         self._set_file_speed_tip(is_reset=True)
 
-        # 
         self.is_pause = False
         self.call_stop = False
         self.is_stoped = False
@@ -215,7 +211,6 @@ class QrAnyTransUI():
             messagebox.showerror("无法开始","未选择文件!")
             return
 
-        # 
         if self.is_pause is False:
             self.call_stop = False
             self.is_stoped = False
@@ -224,7 +219,6 @@ class QrAnyTransUI():
             self.transfer_thread.start()
             
         else:
-            # 
             self.is_stoped = False
             self.is_pause = False
         
@@ -267,14 +261,13 @@ class QrAnyTransUI():
 
     def ask_file(self):
 
-        # 
+        # 先重置所有状态
         self.reset_app()
 
-        # 
+        # 获取文件名
         file_name = askopenfilename()
         file_name = file_name.replace("/", os.sep)
         
-        # 
         with open(file_name, "rb") as tryfile:
             tryfile.seek(0, 2)
             file_size_b = tryfile.tell()
@@ -291,8 +284,8 @@ class QrAnyTransUI():
             self.source_bio = BytesIO()
             self.source_bio.write(self.source_file.read())
         
-        # 
-        self.transfer = Calcer(self.pure_file_name, self.source_bio, DATA_PROT_BYTES, DATA_PROT_V_1, CODE_PROT_SINGLE_CLR,qr_version=32)
+        # 加载到app中
+        self.transfer = Calcer(self.pure_file_name, self.source_bio, DATA_PROT_BYTES, DATA_PROT_V_1, CODE_PROT_SINGLE_CLR, qr_version=31)
 
         self.update_tip(f"文件初始化完成, Meta帧 / {self.transfer.total_batch_count}帧")
     
@@ -314,10 +307,38 @@ class QrAnyTransUI():
         self.buffer_index = 1 - self.buffer_index
         self.main_win.update_idletasks()
 
+    def _check_patchs_legal(self, patchs_str:str, total_frame:int) -> tuple:
+        patchs_num = []
+        try:
+            patchs_num = sorted(set([int(x) for x in list(filter(lambda y:y.strip() != "", patchs_str.split(",")))]))
+
+            if len(patchs_num) == 0:
+                return (False, "无有效的补丁帧")
+                
+            illegal_num = list(filter(lambda x: x < 0 or x >= total_frame, patchs_num))
+
+            if len(illegal_num) > 0:
+                return (False, f"以下帧数超过合法帧[0,{total_frame}):{illegal_num}")
+            
+            return (True, patchs_num)
+        except ValueError as e:
+            messagebox.showerror("出错",f"解析补丁出错, ValueError:{e}")
+            return (False, f"解析补丁出错, ValueError:{e}")
+
     def run_task(self):
 
         task_st = time.time()
         handled_frames = 0
+
+        if self.patch_frame_checkbtn_var.get() is True:
+            check_res = self._check_patchs_legal(self.patch_frames_var.get(), self.transfer.total_batch_count)
+            if check_res[0] is True:
+                self.transfer.open_patchs(check_res[1])
+            else:
+                messagebox.showerror("补丁模式错误", check_res[1])
+        else:
+            self.transfer.close_patchs()
+
 
         handshake_im = self.transfer.gen_handshake_qr()
         tk_im = self._im_to_canvas_im(handshake_im)
@@ -340,29 +361,23 @@ class QrAnyTransUI():
 
             tk_im = self._im_to_canvas_im(data_im)
 
-            # 
             end  = time.time()
 
-            # 
             frame_work_time = end - st
             frame_ideal_time = 1 / self.speed_var_int.get()
             time_break = frame_ideal_time - frame_work_time
             if time_break > 0:
                 time.sleep(time_break)    
 
-            # 
             self._draw_im_to_canvas(tk_im)
             handled_frames += 1
             st = time.time()
 
-            # 
             task_time = st - task_st
             total_trans_B = handled_frames * self.transfer.frame_pure_data_size_byte
             self._set_file_speed_tip(total_trans_B / 1024 / task_time)
 
-            
-            # 
-            # 
+        
             self.update_tip(f"当前处理 {self.transfer.index}/ {self.transfer.total_batch_count}帧")
             
             self.progress_var.set(self.transfer.index / self.transfer.total_batch_count * 100)
@@ -370,9 +385,10 @@ class QrAnyTransUI():
         time.sleep(5)
         self.reset_task()
 
+
 def main():
 
-    ui = QrAnyTransUI()
+    ui = CalcerUI()
     ui.run()
 
 if __name__ == "__main__":
