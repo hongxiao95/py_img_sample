@@ -1,6 +1,5 @@
 #coding:utf-8
 
-
 from threading import Thread
 from tkinter import *
 from tkinter.ttk import *
@@ -10,6 +9,7 @@ import os
 from io import BytesIO
 from PIL import Image, ImageTk
 import time
+
 from utilpkg.Calcer import CODE_PROT_SINGLE_CLR, DATA_PROT_BYTES, DATA_PROT_V_1, Calcer
 
 
@@ -17,16 +17,21 @@ app_version = "1.0 Beta"
 # 最大50M
 MAX_FILE_SIZE = 1024 * 1024 * 50
 CANVAS_SIDE_SIZE = 500
+CANVAS_SIDE_PADDING_RATE = 1.1
+CANVAS_COL = 2
 
-AUTHOR_DESC = f"版本: {app_version}"
+IMAGE_BUFFER_SIZE = 6
 
-class CalcerUI():
+
+AUTHOR_DESC = f"版本: {app_version} "
+
+class ImgTestUI():
     def __init__(self):
         self.main_win = Tk()
         self.main_win.wm_title("图像测试")
         self.pure_file_name = ""
-        self.img_tk_buffer = [0,0]
-        self.img_handles = [0,0]
+        self.img_tk_buffer = [0 for i in range(IMAGE_BUFFER_SIZE)]
+        self.img_handles = [0 for i in range(IMAGE_BUFFER_SIZE)]
         self.buffer_index = 0
 
         self.source_file = None
@@ -45,14 +50,14 @@ class CalcerUI():
         self.main_win.mainloop()
 
     def _prepare_components(self):
+
         self.chosen_file_name_var = StringVar()
         self.choose_file_entry = Entry(self.main_win, state="readonly", textvariable=self.chosen_file_name_var)
         self.choose_file_btn = Button(self.main_win, text = "请选择文件", command=self.ask_file)
         self.choose_file_entry.grid(column=0, row=0, columnspan=6, sticky=EW)
         self.choose_file_btn.grid(column=6, row=0, columnspan=2, sticky=EW)
 
-        # 
-        self.qr_canvas = Canvas(self.main_win, width=CANVAS_SIDE_SIZE, height=CANVAS_SIDE_SIZE, background="white")
+        self.qr_canvas = Canvas(self.main_win, width=int(CANVAS_SIDE_SIZE * CANVAS_SIDE_PADDING_RATE * CANVAS_COL), height=CANVAS_SIDE_SIZE, background="white")
         self.qr_canvas.grid(column=0, row=1, columnspan=8, rowspan=8)
 
         self.speed_var = DoubleVar()
@@ -70,6 +75,7 @@ class CalcerUI():
         self.speed_scale.grid(column=1, row=9, columnspan=6, sticky=EW)
         self.speed_value_label.grid(column=7, row=9, sticky=E)
 
+        # 开始/继续 暂停 停止（归零）
         self.start_btn_var = StringVar()
         self.start_btn_var.set("开始")
         self.start_btn = Button(self.main_win, textvariable=self.start_btn_var, command=self.on_start_btn)
@@ -79,6 +85,7 @@ class CalcerUI():
         self.pause_btn.grid(column=4, row=10, columnspan=2, sticky=EW)
         self.stop_btn.grid(column=6, row=10, columnspan=2, sticky=EW)
 
+        # 补帧
         self.patch_frame_checkbtn_var = BooleanVar()
         self.patch_frame_checkbtn_var.set(False)
         self.patch_frame_checkbtn = Checkbutton(self.main_win, onvalue=True, offvalue=False, text="补帧", variable=self.patch_frame_checkbtn_var)
@@ -90,12 +97,14 @@ class CalcerUI():
         self.patch_frame_checkbtn.grid(column=0, row=11, sticky=EW)
         self.patch_entry.grid(column=1, row=11, columnspan=7, sticky=EW)
 
+        # 上一帧 下一帧
         self.prev_frame_btn = Button(self.main_win, text="上一帧")
         self.next_frame_btn = Button(self.main_win, text="下一帧")
 
         self.prev_frame_btn.grid(column=0, row=12, columnspan=1, sticky=EW)
         self.next_frame_btn.grid(column=1, row=12, columnspan=3, sticky=EW)
 
+        # 跳转到某帧
         self.skip_spin_box = Spinbox(self.main_win, from_=0, to=1000, value=0, increment=1, validate="focus", validatecommand=self._check_skip_frame_spinbox, width=10)
         self.skip_prev_lable = Label(self.main_win, text="跳到")
         self.skip_after_label = Label(self.main_win, text="帧")
@@ -130,6 +139,7 @@ class CalcerUI():
         self.progress_bar = Progressbar(self.main_win, maximum=100, variable=self.progress_var, mode="determinate")
         self.progress_bar.grid(column=0, row=14, columnspan=8, sticky=EW)
 
+
         # 作者信息
         self.author_info_label = Label(self.main_win, text=AUTHOR_DESC, foreground="gray")
         self.author_info_label.grid(column=0, row=15, columnspan=8, sticky=E)
@@ -138,7 +148,9 @@ class CalcerUI():
         return
 
     def reset_app(self):
-
+        '''
+        重置整个应用，清除当前选择的文件和缓存
+        '''
         self.source_file = None
         self.source_bio = BytesIO()
         self.transfer = None
@@ -153,10 +165,13 @@ class CalcerUI():
             self.update_tip(f"文件初始化完成, Meta帧 / {self.transfer.total_batch_count}帧")
 
 
+
         self.qr_canvas.delete("all")
+
 
         self.speed_var.set(5)
         self.speed_var_int.set(5)
+
 
         self.skip_spin_box.set(0)
 
@@ -168,14 +183,17 @@ class CalcerUI():
         self.next_frame_btn.config(state="disabled")
         self.skip_go_btn.config(state="disabled")
 
+
         self.progress_var.set(0)
 
         self.qr_canvas.delete("all")
-        self.img_tk_buffer = [0,0]
-        self.img_handles = [0,0]
+        self.img_tk_buffer = [0 for i in range(IMAGE_BUFFER_SIZE)]
+        self.img_handles = [0 for i in range(IMAGE_BUFFER_SIZE)]
         self.buffer_index = 0
 
+
         self._set_file_speed_tip(is_reset=True)
+
 
         self.is_pause = False
         self.call_stop = False
@@ -183,12 +201,12 @@ class CalcerUI():
 
         return
 
-    def _set_file_speed_tip(self, file_speed_KB:float = 0, is_reset:bool = False):
+    def _set_file_speed_tip(self, file_speed_KB:float = 0, fps:float=0, is_reset:bool = False):
         if is_reset:
             self.file_speed_var.set("当前无速度")
             return
 
-        self.file_speed_var.set(f"均速:{file_speed_KB:.2f}KB")
+        self.file_speed_var.set(f"均速:{file_speed_KB:.2f}KB/s, fps:{fps:.2f}")
 
     def _set_file_size_tip(self, file_size_B:int = 0, is_reset = False):
         if is_reset:
@@ -211,6 +229,7 @@ class CalcerUI():
             messagebox.showerror("无法开始","未选择文件!")
             return
 
+
         if self.is_pause is False:
             self.call_stop = False
             self.is_stoped = False
@@ -219,6 +238,7 @@ class CalcerUI():
             self.transfer_thread.start()
             
         else:
+
             self.is_stoped = False
             self.is_pause = False
         
@@ -235,7 +255,6 @@ class CalcerUI():
     def on_stop_btn(self):
         self.call_stop = True
         self.is_pause = False
-        # 扔到另外的线程做停止完成的后续工作
         wait_stop_thread = Thread(target=self._wait_for_stop_success, name="wait_stop_thread", daemon=True)
         wait_stop_thread.start()
         
@@ -261,13 +280,13 @@ class CalcerUI():
 
     def ask_file(self):
 
-        # 先重置所有状态
         self.reset_app()
 
-        # 获取文件名
+
         file_name = askopenfilename()
         file_name = file_name.replace("/", os.sep)
         
+        # 判断文件大小
         with open(file_name, "rb") as tryfile:
             tryfile.seek(0, 2)
             file_size_b = tryfile.tell()
@@ -285,7 +304,7 @@ class CalcerUI():
             self.source_bio.write(self.source_file.read())
         
         # 加载到app中
-        self.transfer = Calcer(self.pure_file_name, self.source_bio, DATA_PROT_BYTES, DATA_PROT_V_1, CODE_PROT_SINGLE_CLR, qr_version=31)
+        self.transfer = Calcer(self.pure_file_name, self.source_bio, DATA_PROT_BYTES, DATA_PROT_V_1, CODE_PROT_SINGLE_CLR, qr_version=25)
 
         self.update_tip(f"文件初始化完成, Meta帧 / {self.transfer.total_batch_count}帧")
     
@@ -297,15 +316,16 @@ class CalcerUI():
         tk_im = ImageTk.PhotoImage(image=pil_im)
         return tk_im
 
-    def _draw_im_to_canvas(self, im_tk: PhotoImage):
+    def _draw_im_to_canvas(self, im_tk: PhotoImage, pos:int = 0):
         if self.img_handles[self.buffer_index] != 0:
             self.qr_canvas.delete(self.img_handles[self.buffer_index])
         
         self.img_tk_buffer[self.buffer_index] = im_tk
-        handle = self.qr_canvas.create_image(0,0, image=im_tk, anchor=NW)
+        handle = self.qr_canvas.create_image(int(pos * CANVAS_SIDE_SIZE * CANVAS_SIDE_PADDING_RATE) ,0, image=im_tk, anchor=NW)
         self.img_handles[self.buffer_index] = handle
-        self.buffer_index = 1 - self.buffer_index
+        self.buffer_index = (self.buffer_index + 1) % IMAGE_BUFFER_SIZE
         self.main_win.update_idletasks()
+
 
     def _check_patchs_legal(self, patchs_str:str, total_frame:int) -> tuple:
         patchs_num = []
@@ -330,6 +350,7 @@ class CalcerUI():
         task_st = time.time()
         handled_frames = 0
 
+        # 处理补丁模式
         if self.patch_frame_checkbtn_var.get() is True:
             check_res = self._check_patchs_legal(self.patch_frames_var.get(), self.transfer.total_batch_count)
             if check_res[0] is True:
@@ -347,6 +368,7 @@ class CalcerUI():
         has_next = True
         
         st = 0
+        im_pos = 0
         while has_next is True:
             if self.call_stop is True:
                 self.is_stoped = True
@@ -361,23 +383,29 @@ class CalcerUI():
 
             tk_im = self._im_to_canvas_im(data_im)
 
-            end  = time.time()
+            if im_pos == 0:
+                end  = time.time()
 
-            frame_work_time = end - st
-            frame_ideal_time = 1 / self.speed_var_int.get()
-            time_break = frame_ideal_time - frame_work_time
-            if time_break > 0:
-                time.sleep(time_break)    
+                # 决定帧间隔sleep
+                frame_work_time = end - st
+                frame_ideal_time = 1 / self.speed_var_int.get()
+                time_break = frame_ideal_time - frame_work_time
+                if time_break > 0:
+                    time.sleep(time_break)    
 
-            self._draw_im_to_canvas(tk_im)
+            self._draw_im_to_canvas(tk_im, im_pos)
             handled_frames += 1
-            st = time.time()
+
+            if im_pos == 0:
+                st = time.time()
+            im_pos = (im_pos + 1) % CANVAS_COL
 
             task_time = st - task_st
             total_trans_B = handled_frames * self.transfer.frame_pure_data_size_byte
-            self._set_file_speed_tip(total_trans_B / 1024 / task_time)
 
-        
+            real_fps = self.transfer.index / task_time
+            self._set_file_speed_tip(total_trans_B / 1024 / task_time, fps=real_fps)
+
             self.update_tip(f"当前处理 {self.transfer.index}/ {self.transfer.total_batch_count}帧")
             
             self.progress_var.set(self.transfer.index / self.transfer.total_batch_count * 100)
@@ -388,7 +416,7 @@ class CalcerUI():
 
 def main():
 
-    ui = CalcerUI()
+    ui = ImgTestUI()
     ui.run()
 
 if __name__ == "__main__":

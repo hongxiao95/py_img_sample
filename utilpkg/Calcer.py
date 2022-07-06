@@ -1,9 +1,7 @@
 #coding:utf-8
 
-from curses import meta
 from io import BytesIO
 from tkinter import Image
-from unittest.mock import patch
 from utilpkg.CalcBase import ConfirmMethod, StatusCode, CalcBase
 from utilpkg import StringUtil
 import hashlib, json, base64, math, uuid
@@ -25,6 +23,7 @@ DATA_F_META_SIZE_BYTE = 20
 
 MAX_EXT_META_SIZE_BYTE = 63
 
+# 
 RECOMMAND_VERSION = 34
 
 DATA_PROT_V_1 = 1
@@ -62,23 +61,25 @@ class Calcer(CalcBase):
         self.file_bio.seek(0, 2)
         self.file_size_Byte = self.file_bio.tell()
 
-        total_capcity = int(constants.v_max_data_dict[self.version] / 40 * 29) # 应对base64
+
+        total_capcity = int(constants.v_max_data_dict[self.version] / 50 * 40) # 应对base85
         self.frame_pure_data_size_byte = total_capcity - DATA_F_META_SIZE_BYTE - self.ext_meta_size
 
         self.total_batch_count = int(math.ceil(self.file_size_Byte / self.frame_pure_data_size_byte))
 
+
         self.file_bio.seek(0)
         self.file_md5 = hashlib.md5(self.file_bio.read()).hexdigest()
 
-        #恢复文件指针
+
         self.file_bio.seek(0,0)
 
-        # 生成握手包
+
         self.hand_shake_pkg = self._gen_handshake_pkg()
 
         self.main_data_list = []
 
-        # 补丁模式默认关闭
+
         self.patch_mode = False
         self.patch_frames = []
         self.patchs_pointer = 0
@@ -103,14 +104,14 @@ class Calcer(CalcBase):
 
 
     def next_batch(self):
-        # 常规模式
+
         if self.patch_mode is False:
             if self.index == self.total_batch_count - 1:
                 return False
             else:
                 self.index += 1
                 return self.index
-        # 补丁模式
+
         else:
             if self.patchs_pointer == len(self.patch_frames) - 1:
                 return False
@@ -149,7 +150,9 @@ class Calcer(CalcBase):
         qr = qrcode.QRCode(version=self.version, mask_pattern=constants.DEFAULT_MASK_PATTERN, box_size=15, border=6)
         try:
             # qr.add_data(QRData(main_data_obj.get_total_data_bytes(), mode=MODE_8BIT_BYTE))
-            qr.add_data(QRData(base64.b64encode(main_data_obj.get_total_data_bytes()), mode=MODE_8BIT_BYTE))
+            # qr.add_data(QRData(base64.b64encode(main_data_obj.get_total_data_bytes()), mode=MODE_8BIT_BYTE))
+            qr.add_data(QRData(base64.b85encode(main_data_obj.get_total_data_bytes()), mode=MODE_8BIT_BYTE))
+
             im = qr.make_image()
             return im
         except Exception as e:
@@ -161,16 +164,18 @@ class Calcer(CalcBase):
     def _gen_cur_qr_json(self) -> Image:
         json_str = self._gen_batch_data_json()
 
+
         qr = qrcode.QRCode(39, mask_pattern=5)
         try:
             qr.add_data(json_str)
             # qr.best_fit()
-            qr.version = 39 
+            qr.version = 39 # 1536字节+base64时，39可以cover
             
 
             # st = time.time()
             im = qr.make_image()
-
+            # end = time.time()
+            # print(f"mk qrimg耗时: {(end-st) * 1000:.2f} 毫秒")
 
             return im
         except Exception as e:
@@ -231,10 +236,6 @@ class HandshakeDataV1():
 
 class HandshakePkgV1():
 
-    '''
-    握手数据包
-    '''
-
     def __init__(self, success:bool, status_code:int, status_msg_12:str, transfer_uuid:str, handshake_data:HandshakeDataV1):
         self.success = success
         self.status_code = status_code
@@ -281,9 +282,7 @@ class MainDataJSONV1():
         self.md5 = md5
 
 class MainDataBytesV1():
-    '''
-    二进制格式的数据包
-    '''
+
     def __init__(self, data_bytes:bytes, cur_index:int, total_frame:int, transfer_uuid:str, ext_meta_size:int = 0, ext_meta_bytes:bytes=None):
         self.data_bytes = data_bytes
         self.cur_index = cur_index
@@ -293,18 +292,24 @@ class MainDataBytesV1():
         self.ext_meta_bytes = ext_meta_bytes
         self.total_data = None
 
+
         md5_source = self.data_bytes + bytes(str(self.cur_index), encoding="utf-8") + bytes(str(self.total_frame), encoding="utf-8") + bytes(self.transfer_uuid, encoding="utf-8")
         self.data_md5_str = hashlib.md5(md5_source).hexdigest()[8:24]
+
         meta_1_num = self.cur_index
+
         if self.cur_index < self.total_frame - 1:
             meta_1_num = meta_1_num | (1 << 31)
+
         meta_1_num = meta_1_num | (self.ext_meta_size << 25)
 
         meta_1_bytes = meta_1_num.to_bytes(4, byteorder="big")
-        # 置partMD5
+
         self.total_data = meta_1_bytes + bytes(self.data_md5_str, encoding="utf-8")
+
         if isinstance(self.ext_meta_bytes, bytes):
             self.total_data += self.ext_meta_bytes
+
         self.total_data += self.data_bytes
 
     def get_total_data_bytes(self):
