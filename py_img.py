@@ -202,12 +202,12 @@ class ImgTestUI():
 
         return
 
-    def _set_file_speed_tip(self, file_speed_KB:float = 0, fps:float=0, is_reset:bool = False):
+    def _set_file_speed_tip(self, file_speed_KB:float = 0, fps:float=0, est_s:float=0, is_reset:bool = False):
         if is_reset:
             self.file_speed_var.set("当前无速度")
             return
 
-        self.file_speed_var.set(f"均速:{file_speed_KB:.2f}KB/s, fps:{fps:.2f}")
+        self.file_speed_var.set(f"均速:{file_speed_KB:5.2f}KB/s, fps:{fps:5.2f}, est: {est_s:5.0f} s")
 
     def _set_file_size_tip(self, file_size_B:int = 0, is_reset = False):
         if is_reset:
@@ -403,11 +403,10 @@ class ImgTestUI():
 
             task_time = st - task_st
             total_trans_B = handled_frames * self.transfer.frame_pure_data_size_byte
-
             real_fps = self.transfer.index / task_time
-            self._set_file_speed_tip(total_trans_B / 1024 / task_time, fps=real_fps)
 
-            self.update_tip(f"当前处理 {self.transfer.index}/ {self.transfer.total_batch_count}帧")
+            est_s = -1 if real_fps == 0 else (self.transfer.total_batch_count - self.transfer.index) / real_fps
+            self._set_file_speed_tip(total_trans_B / 1024 / task_time, fps=real_fps, est_s=est_s)
             
             self.progress_var.set(self.transfer.index / self.transfer.total_batch_count * 100)
         
